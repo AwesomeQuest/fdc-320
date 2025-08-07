@@ -1,6 +1,14 @@
 #include <SoftwareSerial.h>
 #include <stdint.h>
 
+#define READTIMEOUT 100000 // microseconds
+
+enum {
+	SUCCESS,
+	ERROR_CRC_MISSMATCH,
+	ERROR_TIMEOUT
+};
+
 #define rxPin 3
 #define txPin 5
 
@@ -16,29 +24,107 @@ void setup() {
 }
 
 void loop() {
-	delay(1000);
-	// Serial.println("Trying to send data.");
+	uint8_t inchar = Serial.read();
 
-	if (Serial.available() > 0) {
+	if (inchar == '\n' || inchar == '\r') {
+		uint32_t T = micros();
+		while (Serial.available() < 4) {
+			if (micros() - T > READTIMEOUT) {
+				Serial.println("Serial timeout");
+				return 0;
+			}
+		}
+		uint8_t id = Serial.read();
+		uint8_t adr = Serial.read();
+		uint8_t crc_hi = Serial.read();
+		uint8_t crc_lo = Serial.read();
+		uint16_t crcret = crc_hi << 8 | crc_lo;
 
+		uint8_t recbuff[3] = {inchar, id, adr};
+		uint16_t crccalc = crc16(recbuff, 3);
+		if (crccalc != crcret)
+		{
+			Serial.println("ID CRC MISMATCH");
+			Serial.print("Sent CRC: 0x");
+			Serial.println(crcret, HEX);
+			Serial.print("Calc CRC: 0x");
+			Serial.println(crccalc, HEX);
+			return 0;
+		}
+
+		uint8_t cnt = getregsize((uint16_t)adr);
+
+		if (cnt == 0xff) {
+			Serial.print("INCORRECT REGISTER: 0x");
+			Serial.println(adr, HEX);
+			return 0;
+		}
+
+		if (inchar == '\n') {
+			uint8_t bufflen = 0;
+			uint8_t* buff = readRegisters(&bufflen, id, (uint16_t)adr, (uint16_t)cnt);
+			if (bufflen == 0xff) {
+				Serial.println("FAIL");
+				Serial.print("The error code is: ");
+				Serial.println((uint8_t)buff);
+				free(buff);
+				return 0;
+			}
+			Serial.write(buff, bufflen);
+			Serial.println();
+
+			free(buff);
+		} else if (inchar == '\r') {
+			uint8_t* databuff = calloc(cnt, 2);
+			uint32_t T = micros();
+			while (Serial.available() < cnt*2 + 2) {
+				if (micros() - T > READTIMEOUT) {
+					Serial.println("SERIAL TIMEOUT");
+					return 0;
+				}
+			}
+			for (size_t i = 0; i < cnt*2; i++)
+			{
+				databuff[i] = Serial.read();
+			}
+			crc_hi = Serial.read();
+			crc_lo = Serial.read();
+			crcret = crc_hi << 8 | crc_lo;
+
+			uint16_t crccalc = crc16(databuff, cnt*2);
+			if (crccalc != crcret)
+			{
+				Serial.println("DATA CRC MISMATCH");
+				Serial.print("Sent CRC: 0x");
+				Serial.println(crcret, HEX);
+				Serial.print("Calc CRC: 0x");
+				Serial.println(crccalc, HEX);
+				return 0;
+			}
+
+			uint8_t err = writeRegisters(id, (uint16_t)adr, (uint16_t)cnt, databuff, cnt*2);
+
+			free(databuff);
+			databuff = NULL;
+
+			if (err != 0)
+			{
+				Serial.println("FAIL");
+				Serial.print("The error code is: ");
+				Serial.println(err);
+				return 0;
+			}
+
+			Serial.println("SUCCESS");
+		}
 	}
-
-	uint8_t bufflen = 0;
-	uint8_t* buff = readRegisters(&bufflen, 0x01, 0x0016, 0x0002);
-	if (bufflen == 0xff) {
-		Serial.print("The error is: ");
-		Serial.println((uint8_t)buff);
-		Serial.println("Failure");
-		return 0;
-	}
-	printhexs(buff, bufflen);
-	Serial.print("\n");
-
-	free(buff);
-	
 }
 
-
+// Sends a read registers modbus request
+/*
+	If the bufflength is equal to 0xff then there has been an error
+	and the returned value is not a valid pointer but an error code.
+*/
 static uint8_t* readRegisters(
 	uint8_t* bufflength,
 	uint8_t id,
@@ -58,17 +144,19 @@ static uint8_t* readRegisters(
 	buff[6] = crc >> 8;
 	buff[7] = crc;
 
-	// Serial.println("Sending message");
-	// printhexs(buff, sizeof(buff));
+	while (modbus.available() > 0) {
+		Serial.println("Flushing modbus");
+		modbus.read();
+	}
 	modbus.write(buff, sizeof(buff));
 
-	uint16_t T = micros();
+	uint32_t T = micros();
 	while (modbus.available() < 3) {
-		Serial.println("Waiting for modbus");
-		if (micros() - T > 1000) {
+		if (micros() - T > READTIMEOUT) {
 			*bufflength = 0xff;
-			return -2;
+			return (uint8_t*)ERROR_TIMEOUT;
 		}
+		Serial.println("Waiting for modbus");
 	}
 	
 	// make a buffer with room for everything
@@ -83,6 +171,15 @@ static uint8_t* readRegisters(
 	retbuff[0] = retid;
 	retbuff[1] = retfunc;
 	retbuff[2] = retbnum;
+
+	T = micros();
+	while (modbus.available() < retbnum + 2) {
+		if (micros() - T > READTIMEOUT) {
+			*bufflength = 0xff;
+			return (uint8_t*)ERROR_TIMEOUT;
+		}
+		Serial.println("Waiting for modbus");
+	}
 
 	for (uint8_t i = 0; i < retbnum + 2; i++)
 	{
@@ -100,7 +197,7 @@ static uint8_t* readRegisters(
 	if (retcrc != appcrc){
 		free(retbuff);
 		*bufflength = 0xff;
-		return -1;
+		return (uint8_t*)ERROR_CRC_MISSMATCH;
 	}
 	if (retbuff[1] >= 0x80){
 		free(retbuff);
@@ -126,10 +223,10 @@ static uint8_t writeRegisters(
 	uint8_t* buff = calloc(bufflen,1);
 	buff[0] = id;
 	buff[1] = 0x10;
-	buff[2] = adr >> 8 & 0xFF;
-	buff[3] = adr & 0xFF;
-	buff[4] = regcount >> 8 & 0xFF;
-	buff[5] = regcount & 0xFF;
+	buff[2] = adr >> 8;
+	buff[3] = adr;
+	buff[4] = regcount >> 8;
+	buff[5] = regcount;
 
 	buff[6] = databufflen;
 	memcpy(buff+7, databuff, databufflen);
@@ -138,30 +235,47 @@ static uint8_t writeRegisters(
 	buff[bufflen-2] = crc >> 8;
 	buff[bufflen-1] = crc;
 	
-	modbus.write(buff, sizeof(buff));
+	while (modbus.available() > 0) {
+		Serial.println("Flushing modbus");
+		modbus.read();
+	}
+	modbus.write(buff, bufflen);
 
 	free(buff);
+	buff = NULL;
 
+	uint32_t T = micros();
+	while (modbus.available() < 7) {
+		if (micros() - T > READTIMEOUT) {
+			return ERROR_TIMEOUT;
+		}
+		Serial.println("Waiting for modbus");
+	}
 	uint8_t retbuff[8];
 	for (uint8_t i = 0; i < 8; i++)
 	{
-		while (modbus.available() < 0)
-		{
-			delay(1);
-		}
+		// Maybe this is better?
+		// while (modbus.available() < 0)
+		// {
+		// 	delay(1);
+		// }
 		retbuff[i] = modbus.read();
 	}
 
 	uint16_t retcrc = retbuff[6] << 8 | retbuff[7];
 	uint16_t appcrc = crc16(retbuff, 6);
 
+	// TODO add more error checking like making sure
+	// retbuff contains the right values based on the
+	// request
+
 	if (retcrc != appcrc)
-		return -1;
+		return ERROR_CRC_MISSMATCH;
 
 	if (retbuff[1] >= 0x80)
 		return retbuff[1];
 
-	return 0;
+	return SUCCESS;
 }
 
 void printhexs(uint8_t* buff, uint8_t bufflen) {
@@ -173,6 +287,7 @@ void printhexs(uint8_t* buff, uint8_t bufflen) {
 	}
 }
 
+// A return value of -1 means the register is not valid
 uint8_t getregsize(uint16_t adr) {
 	switch (adr)
 	{
@@ -211,9 +326,6 @@ uint8_t getregsize(uint16_t adr) {
 		break;
 	case 0x0051:
 		return 2;
-		break;
-	case 0x0053:
-		return 1;
 		break;
 	case 0x0053:
 		return 1;
