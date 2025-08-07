@@ -1,6 +1,27 @@
 module FDC320lib
 
-export crc16, writeRegisters
+export crc16, readRegisters, writeRegisters, getCommunicationTest, getReadFlowrateActualFlowrate, getReadFlowrateActualFlowrate, getSetFlowrateActualFlowrate, setSetFlowrateActualFlowrate, getSetFlowratePercentageMethod, setSetFlowratePercentageMethod, getCommunicationAddress, setCommunicationAddress, getCommunicationbBaudrate, setCommunicationBaudrate, getCommunicationCheckbit, setCommunicationCheckbit, getValveControl, setValveControl, getCommunicationMethod, setCommunicationMethod, setEquipmentZeroing, getAccumulatedFlowrate, setAccumulationCleared, getWarningCode, getCalibrationGas, getCalibratedRange
+
+const regtypes = Dict(
+	0x01 => UInt16,
+	0x10 => Float32,
+	0x16 => UInt16,
+	0x20 => Float32,
+	0x26 => UInt16,
+
+	0x30 => UInt16,
+	0x31 => UInt16,
+	0x32 => UInt16,
+	
+	0x2a => UInt16,
+	0x2d => UInt16,
+	0x41 => UInt16,
+	0x51 => UInt32,
+	0x53 => UInt16,
+	0x80 => UInt8,
+	0x87 => Float32,
+)
+
 
 function crc16(buff)::UInt16
 	table_crc_hi = (
@@ -79,77 +100,62 @@ function crc16(buff)::UInt16
 	UInt16(crc_hi) << 8 | crc_lo
 end
 
-function issubsequence(A,B)
-	for i in 1:length(B)-length(A)
-		@view(B[i:i+length(A)-1]) == A && return true
+function readuntilpause(port, pause = 0.1)
+	buff = UInt8[]
+
+	lastmsg = time()
+	while isopen(port) && time()-lastmsg < 100e-3
+		curr = read(port)
+		isempty(curr) && continue
+		append!(buff, curr)
+		lastmsg = time()
 	end
-	return false
+
+	buff
 end
 
-function readRegisters(port, id::UInt8, adr)
+function readRegisters(port, id::Unsigned, adr::Unsigned)
 	tmp = UInt8['\n', id, adr]
 	crc = crc16(tmp)
 	tmp = [tmp; UInt8(crc >> 8); UInt8(crc & 0xff)]
 
 	write(port, tmp)
 
-	buff = []
-
-	IDMISS = b"ID CRC MISMATCH"
-	WRONGREG = b"INCORRECT REGISTER"
-	T = time()
-	while isopen(port) && time()-T < 50e-3 # Only wait 50 ms
-		append!(buff, read(port))
-		@debug String(buff)
-
-	end
-
-end
-
-function writeRegisters(port, id::UInt8, adr::UInt8, val)
-	tmp1 = UInt8['\r', id, adr]
-	crc1 = crc16(tmp1)
-	tmp1 = [tmp1; UInt8(crc1 >> 8); UInt8(crc1 & 0xff)]
-
-	tmp2 = reinterpret(UInt8, [bswap(val)])
-	crc2 = crc16(tmp2)
-	tmp2 = [tmp2; UInt8(crc2 >> 8); UInt8(crc2 & 0xff)]
-
-	write(port, [tmp1;tmp2])
-
-	buff = []
+	buff = UInt8[]
 
 	IDMISS = b"ID CRC MISMATCH"
 	WRONGREG = b"INCORRECT REGISTER"
 	SERTIME = b"SERIAL TIMEOUT"
-	DATAMISS = b"DATA CRC MISMATCH"
 	MODFAIL = b"FAIL"
-	GOODEND = b"SUCCESS"
+	GOODEND = b"SUCCESS\r\n"
 	T = time()
-	while isopen(port) && time()-T < 50e-3 # Only wait 50 ms
+	while isopen(port) && time()-T < 2.0
 		append!(buff, read(port))
-		@debug String(buff)
-		!isnothing(findfirst(GOODEND, buff)) && return 0
-		
-		if !isnothing(findfirst(IDMISS, buff)) || !isnothing(findfirst(WRONGREG, buff)) || !isnothing(findfirst(SERTIME, buff)) || !isnothing(findfirst(DATAMISS, buff))
-			lastmsg = time()
-			while isopen(port) && time()-lastmsg < 100e-3
-				curr = read(port)
-				isempty(curr) && continue
-				append!(buff, curr)
-				lastmsg = time()
-			end
-			error("The arduino returned an error:\n$(String(buff))")
+		@debug buff
+
+		if !isnothing(findfirst(GOODEND, buff))
+			append!(buff, readuntilpause(port, 0.1))
+					
+			msgstart = last(findfirst(GOODEND, buff)) + 1
+			msgend = first(findnext(b"\r\n", buff, msgstart)) - 1
+
+			msg = buff[msgstart:msgend]
+
+			appcrc = reinterpret(UInt16,msg[end-1:end])[1] |> bswap
+			clccrc = crc16(msg[1:end-2])
+
+			appcrc !== clccrc && error("CRC MISMATCH\n The CRC of the returned message does not match the actual CRC \n $(string(clccrc, base=16)) != $(string(appcrc, base=16)) \n msg = $msg")
+
+			return msg[4:4+msg[3]-1]
 		end
 		
+		if !isnothing(findfirst(IDMISS, buff)) || !isnothing(findfirst(WRONGREG, buff)) || !isnothing(findfirst(SERTIME, buff))
+			append!(buff, readuntilpause(port, 0.1))
+			error("The arduino returned an error:\n$(buff)")
+		end
+
 		if !isnothing(findfirst(MODFAIL, buff))
-			lastmsg = time()
-			while isopen(port) && time()-lastmsg < 100e-3
-				curr = read(port)
-				isempty(curr) && continue
-				append!(buff, curr)
-				lastmsg = time()
-			end
+			append!(buff, readuntilpause(port, 0.1))
 
 			errormsg = "The modbus returned an error: "
 			errline = findfirst(b"The error code is: ", buff)
@@ -193,9 +199,280 @@ function writeRegisters(port, id::UInt8, adr::UInt8, val)
 		end
 	end
 
-	isopen(port) && error("Port closed\n Current buffer:\n$(String(buff))")
-	error("Timeout error, arduino took too long or didn't send the right stuff\n Current buffer:\n$(String(buff))")
+	!isopen(port) && error("Port closed\n Current buffer:\n$(buff)")
+	error("Timeout error, arduino took too long or didn't send the right stuff\n Current buffer:\n$(buff)")
+
 end
+
+function writeRegisters(port, id::UInt8, adr::UInt8, val)
+	@assert typeof(val) === regtypes[adr]
+	tmp1 = UInt8['\r', id, adr]
+	crc1 = crc16(tmp1)
+	tmp1 = [tmp1; UInt8(crc1 >> 8); UInt8(crc1 & 0xff)]
+
+	tmp2 = reinterpret(UInt8, [bswap(val)])
+	crc2 = crc16(tmp2)
+	tmp2 = [tmp2; UInt8(crc2 >> 8); UInt8(crc2 & 0xff)]
+
+	write(port, [tmp1;tmp2])
+
+	buff = UInt8[]
+
+	IDMISS = b"ID CRC MISMATCH"
+	WRONGREG = b"INCORRECT REGISTER"
+	SERTIME = b"SERIAL TIMEOUT"
+	DATAMISS = b"DATA CRC MISMATCH"
+	MODFAIL = b"FAIL"
+	GOODEND = b"SUCCESS"
+	T = time()
+	while isopen(port) && time()-T < 2.0
+		append!(buff, read(port))
+		@debug buff
+		!isnothing(findfirst(GOODEND, buff)) && return 0
+		
+		if !isnothing(findfirst(IDMISS, buff)) || !isnothing(findfirst(WRONGREG, buff)) || !isnothing(findfirst(SERTIME, buff)) || !isnothing(findfirst(DATAMISS, buff))
+			append!(buff, readuntilpause(port, 0.1))
+			error("The arduino returned an error:\n$(buff)")
+		end
+		
+		if !isnothing(findfirst(MODFAIL, buff))
+			append!(buff, readuntilpause(port, 0.1))
+
+			errormsg = "The modbus returned an error: "
+			errline = findfirst(b"The error code is: ", buff)
+			errlineend = findnext(b"\n", buff, last(errline))
+			errnum = @view buff[last(errline)+1:errlineend[1]-1]
+			errormsg *= String(errnum)
+
+			errnum = parse(UInt8, String(errnum))
+			if errnum === 0x81
+				errormsg *= """
+				Sensor abnormality/valve leakage
+				Troubleshooting:
+				In the non-ventilated state, zero adjustment is completed after preheating
+				"""
+			elseif errnum === 0x82
+				errormsg *= """
+					Abnormal airsource
+					Troubleshooting:
+					Check air source"""
+				
+			elseif errnum === 0x83
+				errormsg *= """
+					Abnomal power supply voltage
+					Troubleshooting:
+					Check supply voltage"""
+				
+			elseif errnum === 0x84
+				errormsg *= """
+					Set signal over the limit
+					Troubleshooting:
+					Check the set signal value"""
+				
+			else
+				errormsg *= """
+					Unkown error
+					Troubleshooting:
+					If the problem still cannot be solved according to the above process, you need to contact the manufacturer's technical personnel to investigate and solve the problem."""
+			end
+
+			error(errormsg)
+		end
+	end
+
+	!isopen(port) && error("Port closed\n Current buffer:\n$(buff)")
+	error("Timeout error, arduino took too long or didn't send the right stuff\n Current buffer:\n$(buff)")
+end
+
+"""
+If data 0x0101 is returned, the communication test is successful.
+"""
+function getCommunicationTest(port; id=0x01)
+	adr = 0x01
+	reinterpret(regtypes[adr], readRegisters(port, id, adr))[1] |> bswap
+end
+
+"""
+The unit defaults to SCCM, and floating point numbers are encoded according to IEEE 754, with the low byte first and the high byte last.
+"""
+function getReadFlowrateActualFlowrate(port; id=0x01)
+	adr = 0x10
+	reinterpret(regtypes[adr], readRegisters(port, id, adr))[1] |> bswap
+end
+
+"""
+0-10000=0-100.00% * full scale.
+"""
+function getReadFlowratePercentageMethod(port; id=0x01)
+	adr = 0x16
+	reinterpret(regtypes[adr], readRegisters(port, id, adr))[1] |> bswap
+end
+
+"""
+The flow unit defaults to SCCM, and floating point numbers are encoded by IEEE 754, with the low digit first and the high digit last. (You can only choose one of the two traffic setting methods)
+"""
+function getSetFlowrateActualFlowrate(port; id=0x01)
+	adr = 0x20
+	reinterpret(regtypes[adr], readRegisters(port, id, adr))[1] |> bswap
+end
+
+"""
+The flow unit defaults to SCCM, and floating point numbers are encoded by IEEE 754, with the low digit first and the high digit last. (You can only choose one of the two traffic setting methods)
+"""
+function setSetFlowrateActualFlowrate(port, val; id=0x01)
+	adr = 0x20
+	reinterpret(regtypes[adr], writeRegisters(port, id, adr, val))[1] |> bswap
+end
+
+"""
+0-10000=0-100.00% * full scale
+(You can only choose one of the two traffic setting methods)
+"""
+function getSetFlowratePercentageMethod(port; id=0x01)
+	adr = 0x26
+	reinterpret(regtypes[adr], readRegisters(port, id, adr))[1] |> bswap
+end
+
+"""
+0-10000=0-100.00% * full scale
+(You can only choose one of the two traffic setting methods)
+"""
+function setSetFlowratePercentageMethod(port, val; id=0x01)
+	adr = 0x26
+	reinterpret(regtypes[adr], writeRegisters(port, id, adr, val))[1] |> bswap
+end
+
+"""
+Address range 1-99.
+"""
+function getCommunicationAddress(port; id=0x01)
+	adr = 0x30
+	reinterpret(regtypes[adr], readRegisters(port, id, adr))[1] |> bswap
+end
+
+"""
+Address range 1-99.
+"""
+function setCommunicationAddress(port, val; id=0x01)
+	adr = 0x30
+	reinterpret(regtypes[adr], writeRegisters(port, id, adr, val))[1] |> bswap
+end
+
+"""
+Baud rate = sent value * 100; such as 96, corresponding baud rate is 9600 Bps.
+"""
+function getCommunicationbBaudrate(port; id=0x01)
+	adr = 0x31
+	reinterpret(regtypes[adr], readRegisters(port, id, adr))[1] |> bswap
+end
+
+"""
+Baud rate = sent value * 100; such as 96, corresponding baud rate is 9600 Bps.
+"""
+function setCommunicationBaudrate(port, val; id=0x01)
+	adr = 0x31
+	reinterpret(regtypes[adr], writeRegisters(port, id, adr, val))[1] |> bswap
+end
+
+"""
+0: No parity; 1: Odd parity; 2: Even parity.
+"""
+function getCommunicationCheckbit(port; id=0x01)
+	adr = 0x32
+	reinterpret(regtypes[adr], readRegisters(port, id, adr))[1] |> bswap
+end
+
+"""
+0: No parity; 1: Odd parity; 2: Even parity.
+"""
+function setCommunicationCheckbit(port, val; id=0x01)
+	adr = 0x32
+	reinterpret(regtypes[adr], writeRegisters(port, id, adr, val))[1] |> bswap
+end
+
+"""
+0: Normal control; 2: Cleaning (open at full power)
+If the cleaning function is not required, there is no need to perform this operation, and the default is the normal control state.
+"""
+function getValveControl(port; id=0x01)
+	adr = 0x2a
+	reinterpret(regtypes[adr], readRegisters(port, id, adr))[1] |> bswap
+end
+
+"""
+0: Normal control; 2: Cleaning (open at full power)
+If the cleaning function is not required, there is no need to perform this operation, and the default is the normal control state.
+"""
+function setValveControl(port, val; id=0x01)
+	adr = 0x2a
+	reinterpret(regtypes[adr], writeRegisters(port, id, adr, val))[1] |> bswap
+end
+
+"""
+1: Rs485 communication; 2: Analog communication.
+"""
+function getCommunicationMethod(port; id=0x01)
+	adr = 0x2d
+	reinterpret(regtypes[adr], readRegisters(port, id, adr))[1] |> bswap
+end
+
+"""
+1: Rs485 communication; 2: Analog communication.
+"""
+function setCommunicationMethod(port, val; id=0x01)
+	adr = 0x2d
+	reinterpret(regtypes[adr], writeRegisters(port, id, adr, val))[1] |> bswap
+end
+
+"""
+Send 0xf0 to perform an auto-zero (make sure no gas is passing through to do this).
+"""
+function setEquipmentZeroing(port; id=0x01)
+	adr = 0x41
+	reinterpret(regtypes[adr], writeRegisters(port, id, adr, 0x00f0))[1] |> bswap
+end
+
+"""
+The unit defaults to smL, with low bits in front and high bits in the back.
+"""
+function getAccumulatedFlowrate(port; id=0x01)
+	adr = 0x51
+	reinterpret(regtypes[adr], readRegisters(port, id, adr))[1] |> bswap
+end
+
+"""
+Send data: 0x01, then perform clearing.
+"""
+function setAccumulationCleared(port; id=0x01)
+	adr = 0x53
+	reinterpret(regtypes[adr], writeRegisters(port, id, adr, 0x0001))[1] |> bswap
+end
+
+"""
+See Appendix 1 for the warning code table for details.
+"""
+function getWarningCode(port; id=0x01)
+	adr = 0x61
+	reinterpret(regtypes[adr], readRegisters(port, id, adr))[1] |> bswap
+end
+
+"""
+Corresponds to the ASCII code table.
+"""
+function getCalibrationGas(port; id=0x01)
+	adr = 0x80
+	String(readRegisters(port, id, adr))
+end
+
+"""
+The unit defaults to SCCM, and floating point numbers are encoded according to IEEE 754, with the low bit first and the high bit last.
+"""
+function getCalibratedRange(port; id=0x01)
+	adr = 0x87
+	reinterpret(regtypes[adr], readRegisters(port, id, adr))[1] |> bswap
+end
+
+
 
 end
 

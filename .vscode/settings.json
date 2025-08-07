@@ -1,0 +1,17 @@
+{
+	"cSpell.words": [
+		"DATAMISS",
+		"GOODEND",
+		"IDMISS",
+		"lastmsg",
+		"MODFAIL",
+		"msgend",
+		"msgstart",
+		"readuntilpause",
+		"SERTIME",
+		"WRONGREG"
+	],
+	"cSpell.enabledFileTypes": {
+		"julia": false
+	}
+}

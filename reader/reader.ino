@@ -30,7 +30,7 @@ void loop() {
 		uint32_t T = micros();
 		while (Serial.available() < 4) {
 			if (micros() - T > READTIMEOUT) {
-				Serial.println("Serial timeout");
+				Serial.println("SERIAL TIMEOUT");
 				return 0;
 			}
 		}
@@ -70,6 +70,7 @@ void loop() {
 				free(buff);
 				return 0;
 			}
+			Serial.println("SUCCESS");
 			Serial.write(buff, bufflen);
 			Serial.println();
 

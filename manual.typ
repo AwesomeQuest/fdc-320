@@ -1,10 +1,8 @@
 #import "@preview/min-manual:0.1.0": manual
 
-#set raw(syntaxes: "PowerShell.sublime-syntax")
-
 #show: manual.with(
   title: "Package Name",
-  description: "How to opperate the FDC-320 with arduino controller",
+  description: "How to opperate the FDC-320 with Arduino controller",
   authors: "Torfi Þorgrímsson <mailto:torfit@gmail.com>",
   license: "MIT",
 )
@@ -12,17 +10,26 @@
 #show raw: set text(font: "iosevka")
 
 = Quick Start
-First you must install the Julia language
+== Download the github repo
+First clone the github repo
+```sh
+git clone https://github.com/AwesomeQuest/fdc-320.git
+```
+
+Feel free to open an issue or send me an email if you have any problems.
+
+== Install Julia
+Second you must install the Julia language
 
 === Windows
 Run the following command in powershell or cmd
-```bash
-winget install Julialang.Julia
+```sh
+winget install JuliaLang.Julia
 ```
 
 === Linux
 Run the following command in your favorite shell
-```bash
+```sh
 curl -fsSL https://install.julialang.org | sh
 ```
 
@@ -74,3 +81,5 @@ In order to use a USB port for serial communication you must "open" it first. Th
 julia> port = LibSerialPort.open("COM3", 9600)
 SerialPort(Ptr{LibSerialPort.Lib.SPPort}(0x00000243cd500590), false, true, 0x00000000, 0x00000000)
 ```
+Here the first argument is the name of the port as shown by `list_ports()` and the second argument is the baud-rate. It is critical that the baud-rate be set the same as the Arduino, I have set it to 9600. The baud-rate of the FDC-320 is an internal setting and must be changed with the `setCommunicationAddress` function, then you must change the Arduino code to match.
+
