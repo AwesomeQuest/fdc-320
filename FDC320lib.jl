@@ -1,6 +1,6 @@
 module FDC320lib
 
-export crc16, readRegisters, writeRegisters, getCommunicationTest, getReadFlowrateActualFlowrate, getReadFlowrateActualFlowrate, getSetFlowrateActualFlowrate, setSetFlowrateActualFlowrate, getSetFlowratePercentageMethod, setSetFlowratePercentageMethod, getCommunicationAddress, setCommunicationAddress, getCommunicationbBaudrate, setCommunicationBaudrate, getCommunicationCheckbit, setCommunicationCheckbit, getValveControl, setValveControl, getCommunicationMethod, setCommunicationMethod, setEquipmentZeroing, getAccumulatedFlowrate, setAccumulationCleared, getWarningCode, getCalibrationGas, getCalibratedRange
+export readRegisters, writeRegisters,get_CommunicationTest,get_ReadFlowrateActualFlowrate,get_ReadFlowratePercentageMethod,get_SetFlowrateActualFlowrate,set_SetFlowrateActualFlowrate,get_SetFlowratePercentageMethod,get_CommunicationAddress,get_CommunicationbBaudrate,get_CommunicationCheckbit,get_ValveControl,get_CommunicationMethod,get_AccumulatedFlowrate,get_WarningCode,get_CalibrationGas,get_CalibratedRange,set_EquipmentZeroing,set_SetFlowratePercentageMethod,set_CommunicationAddress,set_CommunicationBaudrate,set_CommunicationCheckbit,set_ValveControl,set_CommunicationMethod,set_AccumulationCleared
 
 const regtypes = Dict(
 	0x01 => UInt16,
@@ -287,7 +287,7 @@ end
 """
 If data 0x0101 is returned, the communication test is successful.
 """
-function getCommunicationTest(port; id=0x01)
+function get_CommunicationTest(port; id=0x01)
 	adr = 0x01
 	reinterpret(regtypes[adr], readRegisters(port, id, adr))[1] |> bswap
 end
@@ -295,7 +295,7 @@ end
 """
 The unit defaults to SCCM, and floating point numbers are encoded according to IEEE 754, with the low byte first and the high byte last.
 """
-function getReadFlowrateActualFlowrate(port; id=0x01)
+function get_ReadFlowrateActualFlowrate(port; id=0x01)
 	adr = 0x10
 	reinterpret(regtypes[adr], readRegisters(port, id, adr))[1] |> bswap
 end
@@ -303,7 +303,7 @@ end
 """
 0-10000=0-100.00% * full scale.
 """
-function getReadFlowratePercentageMethod(port; id=0x01)
+function get_ReadFlowratePercentageMethod(port; id=0x01)
 	adr = 0x16
 	reinterpret(regtypes[adr], readRegisters(port, id, adr))[1] |> bswap
 end
@@ -311,7 +311,7 @@ end
 """
 The flow unit defaults to SCCM, and floating point numbers are encoded by IEEE 754, with the low digit first and the high digit last. (You can only choose one of the two traffic setting methods)
 """
-function getSetFlowrateActualFlowrate(port; id=0x01)
+function get_SetFlowrateActualFlowrate(port; id=0x01)
 	adr = 0x20
 	reinterpret(regtypes[adr], readRegisters(port, id, adr))[1] |> bswap
 end
@@ -319,16 +319,16 @@ end
 """
 The flow unit defaults to SCCM, and floating point numbers are encoded by IEEE 754, with the low digit first and the high digit last. (You can only choose one of the two traffic setting methods)
 """
-function setSetFlowrateActualFlowrate(port, val; id=0x01)
+function set_SetFlowrateActualFlowrate(port, val; id=0x01)
 	adr = 0x20
-	reinterpret(regtypes[adr], writeRegisters(port, id, adr, val))[1] |> bswap
+	writeRegisters(port, id, adr, val)
 end
 
 """
 0-10000=0-100.00% * full scale
 (You can only choose one of the two traffic setting methods)
 """
-function getSetFlowratePercentageMethod(port; id=0x01)
+function get_SetFlowratePercentageMethod(port; id=0x01)
 	adr = 0x26
 	reinterpret(regtypes[adr], readRegisters(port, id, adr))[1] |> bswap
 end
@@ -337,15 +337,15 @@ end
 0-10000=0-100.00% * full scale
 (You can only choose one of the two traffic setting methods)
 """
-function setSetFlowratePercentageMethod(port, val; id=0x01)
+function set_SetFlowratePercentageMethod(port, val; id=0x01)
 	adr = 0x26
-	reinterpret(regtypes[adr], writeRegisters(port, id, adr, val))[1] |> bswap
+	writeRegisters(port, id, adr, val)
 end
 
 """
 Address range 1-99.
 """
-function getCommunicationAddress(port; id=0x01)
+function get_CommunicationAddress(port; id=0x01)
 	adr = 0x30
 	reinterpret(regtypes[adr], readRegisters(port, id, adr))[1] |> bswap
 end
@@ -353,15 +353,15 @@ end
 """
 Address range 1-99.
 """
-function setCommunicationAddress(port, val; id=0x01)
+function set_CommunicationAddress(port, val; id=0x01)
 	adr = 0x30
-	reinterpret(regtypes[adr], writeRegisters(port, id, adr, val))[1] |> bswap
+	writeRegisters(port, id, adr, val)
 end
 
 """
 Baud rate = sent value * 100; such as 96, corresponding baud rate is 9600 Bps.
 """
-function getCommunicationbBaudrate(port; id=0x01)
+function get_CommunicationbBaudrate(port; id=0x01)
 	adr = 0x31
 	reinterpret(regtypes[adr], readRegisters(port, id, adr))[1] |> bswap
 end
@@ -369,15 +369,15 @@ end
 """
 Baud rate = sent value * 100; such as 96, corresponding baud rate is 9600 Bps.
 """
-function setCommunicationBaudrate(port, val; id=0x01)
+function set_CommunicationBaudrate(port, val; id=0x01)
 	adr = 0x31
-	reinterpret(regtypes[adr], writeRegisters(port, id, adr, val))[1] |> bswap
+	writeRegisters(port, id, adr, val)
 end
 
 """
 0: No parity; 1: Odd parity; 2: Even parity.
 """
-function getCommunicationCheckbit(port; id=0x01)
+function get_CommunicationCheckbit(port; id=0x01)
 	adr = 0x32
 	reinterpret(regtypes[adr], readRegisters(port, id, adr))[1] |> bswap
 end
@@ -385,16 +385,16 @@ end
 """
 0: No parity; 1: Odd parity; 2: Even parity.
 """
-function setCommunicationCheckbit(port, val; id=0x01)
+function set_CommunicationCheckbit(port, val; id=0x01)
 	adr = 0x32
-	reinterpret(regtypes[adr], writeRegisters(port, id, adr, val))[1] |> bswap
+	writeRegisters(port, id, adr, val)
 end
 
 """
 0: Normal control; 2: Cleaning (open at full power)
 If the cleaning function is not required, there is no need to perform this operation, and the default is the normal control state.
 """
-function getValveControl(port; id=0x01)
+function get_ValveControl(port; id=0x01)
 	adr = 0x2a
 	reinterpret(regtypes[adr], readRegisters(port, id, adr))[1] |> bswap
 end
@@ -403,15 +403,15 @@ end
 0: Normal control; 2: Cleaning (open at full power)
 If the cleaning function is not required, there is no need to perform this operation, and the default is the normal control state.
 """
-function setValveControl(port, val; id=0x01)
+function set_ValveControl(port, val; id=0x01)
 	adr = 0x2a
-	reinterpret(regtypes[adr], writeRegisters(port, id, adr, val))[1] |> bswap
+	writeRegisters(port, id, adr, val)
 end
 
 """
 1: Rs485 communication; 2: Analog communication.
 """
-function getCommunicationMethod(port; id=0x01)
+function get_CommunicationMethod(port; id=0x01)
 	adr = 0x2d
 	reinterpret(regtypes[adr], readRegisters(port, id, adr))[1] |> bswap
 end
@@ -419,23 +419,23 @@ end
 """
 1: Rs485 communication; 2: Analog communication.
 """
-function setCommunicationMethod(port, val; id=0x01)
+function set_CommunicationMethod(port, val; id=0x01)
 	adr = 0x2d
-	reinterpret(regtypes[adr], writeRegisters(port, id, adr, val))[1] |> bswap
+	writeRegisters(port, id, adr, val)
 end
 
 """
 Send 0xf0 to perform an auto-zero (make sure no gas is passing through to do this).
 """
-function setEquipmentZeroing(port; id=0x01)
+function set_EquipmentZeroing(port; id=0x01)
 	adr = 0x41
-	reinterpret(regtypes[adr], writeRegisters(port, id, adr, 0x00f0))[1] |> bswap
+	writeRegisters(port, id, adr, val)
 end
 
 """
 The unit defaults to smL, with low bits in front and high bits in the back.
 """
-function getAccumulatedFlowrate(port; id=0x01)
+function get_AccumulatedFlowrate(port; id=0x01)
 	adr = 0x51
 	reinterpret(regtypes[adr], readRegisters(port, id, adr))[1] |> bswap
 end
@@ -443,15 +443,15 @@ end
 """
 Send data: 0x01, then perform clearing.
 """
-function setAccumulationCleared(port; id=0x01)
+function set_AccumulationCleared(port; id=0x01)
 	adr = 0x53
-	reinterpret(regtypes[adr], writeRegisters(port, id, adr, 0x0001))[1] |> bswap
+	writeRegisters(port, id, adr, val)
 end
 
 """
 See Appendix 1 for the warning code table for details.
 """
-function getWarningCode(port; id=0x01)
+function get_WarningCode(port; id=0x01)
 	adr = 0x61
 	reinterpret(regtypes[adr], readRegisters(port, id, adr))[1] |> bswap
 end
@@ -459,7 +459,7 @@ end
 """
 Corresponds to the ASCII code table.
 """
-function getCalibrationGas(port; id=0x01)
+function get_CalibrationGas(port; id=0x01)
 	adr = 0x80
 	String(readRegisters(port, id, adr))
 end
@@ -467,12 +467,23 @@ end
 """
 The unit defaults to SCCM, and floating point numbers are encoded according to IEEE 754, with the low bit first and the high bit last.
 """
-function getCalibratedRange(port; id=0x01)
+function get_CalibratedRange(port; id=0x01)
 	adr = 0x87
 	reinterpret(regtypes[adr], readRegisters(port, id, adr))[1] |> bswap
 end
 
+function readTandH(port)
+	write(port, 0x0c)
+	ret = readuntilpause(port)
 
+	clccrc = crc16(@view ret[1:end-2])
+	appcrc = reinterpret(UInt16, ret[end-1:end])[1]
+	appcrc !== clccrc && error("CRC MISMATCH\nThe CRC of the returned message does not match the actual CRC \n 0x$(string(clccrc, base=16)) != 0x$(string(appcrc, base=16)) \n msg = $buff")
+
+	T, H = reinterpret(Float32, ret[4:4+7])
+
+	(temperature=T, humidity=H)
+end
 
 end
 

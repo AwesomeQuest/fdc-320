@@ -1,7 +1,11 @@
 #include <SoftwareSerial.h>
 #include <stdint.h>
+#include "DHT.h"
 
 #define READTIMEOUT 100000 // microseconds
+
+#define DHT22_PIN 2
+DHT dht22(DHT22_PIN, DHT22);
 
 enum {
 	SUCCESS,
@@ -16,6 +20,8 @@ SoftwareSerial modbus (rxPin, txPin);
 
 void setup() {
 	// put your setup code here, to run once:
+	dht22.begin();
+
 	pinMode(rxPin, INPUT);
 	pinMode(txPin, OUTPUT);
 
@@ -118,6 +124,20 @@ void loop() {
 
 			Serial.println("SUCCESS");
 		}
+	} else if (inchar == 0x0c) {
+		float temp = dht22.readTemperature();
+		float humi = dht22.readHumidity();
+
+		uint8_t buff[2+1+8+2];
+		buff[0] = 'T';
+		buff[1] = 'H';
+		buff[2] = 0x08;
+		memcpy(buff+3, &temp, 4);
+		memcpy(buff+3+4, &humi, 4);
+		uint16_t crc = crc16(buff, 2+1+8);
+		memcpy(buff+3+4+4, &crc, 2);
+
+		Serial.write(buff, sizeof(buff));
 	}
 }
 
@@ -160,13 +180,13 @@ static uint8_t* readRegisters(
 		Serial.println("Waiting for modbus");
 	}
 	
-	// make a buffer with room for everything
-	//  1    1        1        x   2
-	// id func dbufflen databuff crc
 	uint8_t retid = modbus.read();
 	uint8_t retfunc = modbus.read();
 	uint8_t retbnum = modbus.read();
-
+	
+	// make a buffer with room for everything
+	//  1    1        1        x   2
+	// id func dbufflen databuff crc
 	uint8_t retbufflen = 3+retbnum+2;
 	uint8_t* retbuff = calloc(retbufflen, 1);
 	retbuff[0] = retid;
@@ -189,11 +209,6 @@ static uint8_t* readRegisters(
 
 	uint16_t retcrc = retbuff[retbufflen-2] << 8 | retbuff[retbufflen-1];
 	uint16_t appcrc = crc16(retbuff, retbufflen-2);
-
-	// Serial.print("The return CRC is: 0x");
-	// Serial.println(retcrc, HEX);
-	// Serial.print("The calced CRC is: 0x");
-	// Serial.println(appcrc, HEX);
 
 	if (retcrc != appcrc){
 		free(retbuff);
