@@ -41,7 +41,6 @@ curl -fsSL https://install.julialang.org | sh
 ```
 
 
-#pagebreak()
 == Setup environment
 Then open a Julia REPL in the `FDC-320` folder as follows
 ```
@@ -241,9 +240,10 @@ import circuiteria: *
       )
     )
   )
-  
+
+    let mulheight = 8.33
   element.block(
-    x:10,y:3,w:4,h:6,
+      x:10,y:10 - mulheight,w:4,h:mulheight,
     id:"conv",
     name:"Multiplexer V3.0",
     fill: rgb("#737575"),
@@ -270,7 +270,7 @@ import circuiteria: *
   wire.wire("w", ("ard-port-D5", "conv-port-ARX"),style:"zigzag")
 
   element.block(
-    x:15,y:0,w:4,h:3,
+    x:17,y:0,w:4,h:3,
     id:"dht",
     name:text("DHT22"),
     fill: rgb("#e3e4ec"),
@@ -282,12 +282,13 @@ import circuiteria: *
       )
     )
   )
-  wire.wire("w", ("ard-port-D2", "dht-port-DAT"), style: "zigzag")
+    wire.wire("w", ("ard-port-D2", "dht-port-DAT"), style: "zigzag", zigzag-ratio: 20%)
   wire.wire("w", ("conv-port-GND2", "dht-port-GND"), style: "zigzag")
   wire.wire("w", ("conv-port-5V2", "dht-port-5V"), style: "zigzag", zigzag-ratio: 70%)
 
+    let fdcheight = 5
   element.block(
-    x:15,y:5,w:4,h:4,
+    x:17,y:10- fdcheight,w:4,h:fdcheight,
     id:"fdc",
     name:"FDC-320",
     fill: rgb("#99a4fb"),
@@ -312,6 +313,6 @@ import circuiteria: *
 })
 ]
 
+
+
 If you need to replace the multiplexer board it is called "Multi USB RS232 RS485 TTL Converter SKU TEL0070".
-
-
