@@ -15,6 +15,10 @@
 Run `winget install Git.Git` in cmd or powershell on Windows
 
 Run `sudo apt install git` on Linux
+
+#heading(outlined: false)[make sure it's been included in the `PATH` environment variable]
+Sometimes on windows `winget` won't put the git/julia executable in the path variable. It seems to always put it in the start menu so you can find the executable there and add it's path to the `PATH` environment variable.
+
 == Download the github repository
 ```sh
 git clone https://github.com/AwesomeQuest/fdc-320.git
@@ -23,7 +27,6 @@ The repo also has a copy of this manual in case you need another copy.
 Feel free to open an issue or send me an email if you have any problems.
 
 == Install Julia
-Second you must install the Julia language
 
 #heading(outlined: false, level: 3)[Windows]
 Run the following command in powershell or cmd
@@ -40,7 +43,7 @@ curl -fsSL https://install.julialang.org | sh
 
 #pagebreak()
 == Setup environment
-Then open a Julia REPL in the `FDC-320` folder
+Then open a Julia REPL in the `FDC-320` folder as follows
 ```
 julia --project=.
 ```
@@ -60,12 +63,18 @@ And you should see something like this
 julia>
 ```
 
+Install the required packages.
+
+```jl
+julia> ]
+
+(fdc-320) pkg> instantiate
+```
+
 Then include the file `FDC320lib.jl`
 ```jl
 julia> include("FDC320lib.jl")
 ```
-
-This file automatically puts the relevant libraries in your namespace.
 
 == Querying the FDC-320
 === List available ports
@@ -304,3 +313,5 @@ import circuiteria: *
 ]
 
 If you need to replace the multiplexer board it is called "Multi USB RS232 RS485 TTL Converter SKU TEL0070".
+
+

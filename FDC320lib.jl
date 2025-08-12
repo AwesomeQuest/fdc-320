@@ -1,7 +1,3 @@
-module FDC320lib
-
-export readRegisters, writeRegisters,get_CommunicationTest,get_ReadFlowrateActualFlowrate,get_ReadFlowratePercentageMethod,get_SetFlowrateActualFlowrate,set_SetFlowrateActualFlowrate,get_SetFlowratePercentageMethod,get_CommunicationAddress,get_CommunicationbBaudrate,get_CommunicationCheckbit,get_ValveControl,get_CommunicationMethod,get_AccumulatedFlowrate,get_WarningCode,get_CalibrationGas,get_CalibratedRange,set_EquipmentZeroing,set_SetFlowratePercentageMethod,set_CommunicationAddress,set_CommunicationBaudrate,set_CommunicationCheckbit,set_ValveControl,set_CommunicationMethod,set_AccumulationCleared
-
 const regtypes = Dict(
 	0x01 => UInt16,
 	0x10 => Float32,
@@ -18,6 +14,7 @@ const regtypes = Dict(
 	0x41 => UInt16,
 	0x51 => UInt32,
 	0x53 => UInt16,
+	0x61 => UInt16,
 	0x80 => UInt8,
 	0x87 => Float32,
 )
@@ -210,7 +207,9 @@ function writeRegisters(port, id::UInt8, adr::UInt8, val)
 	crc1 = crc16(tmp1)
 	tmp1 = [tmp1; UInt8(crc1 >> 8); UInt8(crc1 & 0xff)]
 
-	tmp2 = reinterpret(UInt8, [bswap(val)])
+	
+	tmp2 = reinterpret(UInt8, [val])
+	tmp2 = typeof(val) === Float32 ? tmp2[[2,1,4,3]] : reverse(tmp2)
 	crc2 = crc16(tmp2)
 	tmp2 = [tmp2; UInt8(crc2 >> 8); UInt8(crc2 & 0xff)]
 
@@ -297,7 +296,7 @@ The unit defaults to SCCM, and floating point numbers are encoded according to I
 """
 function get_ReadFlowrateActualFlowrate(port; id=0x01)
 	adr = 0x10
-	reinterpret(regtypes[adr], readRegisters(port, id, adr))[1] |> bswap
+	reinterpret(regtypes[adr], readRegisters(port, id, adr)[[3,4,1,2]])[1] |> bswap
 end
 
 """
@@ -313,7 +312,7 @@ The flow unit defaults to SCCM, and floating point numbers are encoded by IEEE 7
 """
 function get_SetFlowrateActualFlowrate(port; id=0x01)
 	adr = 0x20
-	reinterpret(regtypes[adr], readRegisters(port, id, adr))[1] |> bswap
+	reinterpret(regtypes[adr], readRegisters(port, id, adr)[[3,4,1,2]])[1] |> bswap
 end
 
 """
@@ -469,7 +468,7 @@ The unit defaults to SCCM, and floating point numbers are encoded according to I
 """
 function get_CalibratedRange(port; id=0x01)
 	adr = 0x87
-	reinterpret(regtypes[adr], readRegisters(port, id, adr))[1] |> bswap
+	reinterpret(regtypes[adr], readRegisters(port, id, adr)[[3,4,1,2]])[1] |> bswap
 end
 
 function readTandH(port)
@@ -485,6 +484,4 @@ function readTandH(port)
 	(temperature=T, humidity=H)
 end
 
-end
-
-using .FDC320lib, LibSerialPort
+using LibSerialPort
