@@ -4,6 +4,13 @@
 
 #define READTIMEOUT 100000 // microseconds
 
+
+#define MULTIPLEXERINPUTPIN 4
+#define MULTIPLEXERDATAPIN1 6
+#define MULTIPLEXERDATAPIN1 7
+#define MULTIPLEXERDATAPIN1 8
+#define MULTIPLEXERDATAPIN1 9
+
 #define DHT22_PIN 2
 DHT dht22(DHT22_PIN, DHT22);
 
@@ -138,7 +145,41 @@ void loop() {
 		memcpy(buff+3+4+4, &crc, 2);
 
 		Serial.write(buff, sizeof(buff));
+	} else if (inchar == 0x0b)
+	{
+		uint32_t T = micros();
+		while (Serial.available() < 4) {
+			if (micros() - T > READTIMEOUT) {
+				Serial.println("SERIAL TIMEOUT");
+				return 0;
+			}
+		}
+		uint8_t controlbyte = Serial.read();
+		uint8_t crc_hi = Serial.read();
+		uint8_t crc_lo = Serial.read();
+		uint16_t crcret = crc_hi << 8 | crc_lo;
+
+		uint8_t recbuff[2] = {inchar, controlbyte};
+		uint16_t crccalc = crc16(recbuff, 3);
+		if (crccalc != crcret)
+		{
+			Serial.println("CRC MISMATCH");
+			Serial.print("Sent CRC: 0x");
+			Serial.println(crcret, HEX);
+			Serial.print("Calc CRC: 0x");
+			Serial.println(crccalc, HEX);
+			return 0;
+		}
+
+		digitalWrite(MULTIPLEXERDATAPIN1, controlbyte & 0b00000001);
+		digitalWrite(MULTIPLEXERDATAPIN2, controlbyte & 0b00000010 >> 1);
+		digitalWrite(MULTIPLEXERDATAPIN3, controlbyte & 0b00000100 >> 2);
+		digitalWrite(MULTIPLEXERDATAPIN4, controlbyte & 0b00001000 >> 3);
+		digitalWrite(MULTIPLEXERINPUTPIN, controlbyte & 0b00010000 >> 4);
+
+		Serial.println("SUCCESS");
 	}
+	
 }
 
 // Sends a read registers modbus request

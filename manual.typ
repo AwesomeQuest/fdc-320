@@ -1,5 +1,6 @@
 #import "@preview/min-manual:0.1.0": manual
 #import "@preview/circuiteria:0.2.0"
+#import "@preview/cetz:0.4.1" as cetz
 
 #show: manual.with(
   title: "FDC-320 with Arduino",
@@ -216,6 +217,37 @@ true
 
 The function returns a `NamedTuple` which can either indexed into like an array or via field like a struct.
 
+= Setting thet multiplexer pins
+
+The file `FDC320lib.jl` also contains a function to set the multiplexer outputs.
+
+It can be called in three ways:
+
+
+```jl
+julia> setmultiplexer(port, 10)
+```
+
+This way you explicitly set output pin 10 on the multiplexer to 5V
+
+```jl
+julia> setmultiplexer(port, 0b11010)
+"SUCCESS\n"
+```
+
+This sets pin 1/A to `0`, pin 2/B to `1`, pin 3/C to `0`, pin 4/D to `1` and the input pin to `1`, which means that output pin `10` on the multiplexer will be connected to the input/output of the multiplexer and the input is set to 5V.
+
+Keep in mind that if you generally want to keep bit 5 equal to `1`, otherwise none of the outputs will be connected.
+
+And finally setting the pins with individual arguments:
+
+```jl
+julia> setmultiplexer(port, false, true, false, true, true)
+```
+
+Notice here the bits are in the opposite order, since it counting pin 1, pin 2 etc.
+
+
 = Arduino code and wiring
 The Arduino is running the file `reader/reader.ino` and can be uploaded directly to the Arduino via the ArduinoIDE.
 
@@ -224,9 +256,9 @@ The Arduino is running the file `reader/reader.ino` and can be uploaded directly
 )[
 #circuiteria.circuit({
 import circuiteria: *
-
+  let ardheight = 18
   element.block(
-    x:4,y:0,w:4,h:10,
+    x:4,y:10-ardheight,w:4,h:ardheight,
     id:"ard",
     name:"Arduino",
     fill: rgb("#008184"),
@@ -237,6 +269,11 @@ import circuiteria: *
         (id:"D5", name:"D5"),
         (id:"D3", name:"D3"),
         (id:"D2", name:"D2"),
+        (id:"D4", name:"D4"),
+        (id:"D6", name:"D6"),
+        (id:"D7", name:"D7"),
+        (id:"D8", name:"D8"),
+        (id:"D9", name:"D9"),
       )
     )
   )
@@ -245,7 +282,7 @@ import circuiteria: *
   element.block(
       x:10,y:10 - mulheight,w:4,h:mulheight,
     id:"conv",
-    name:"Multiplexer V3.0",
+    name:"RS-485 Conv",
     fill: rgb("#737575"),
     ports: (
       west:(
@@ -308,11 +345,92 @@ import circuiteria: *
   wire.wire("w", ("conv-port-BA", "fdc-port-9"), style: "zigzag")
 
   wire.stub("fdc-port-2", "east", name:"24V-VCC")
-  wire.stub("fdc-port-7", "east", name:"VEE")
+  wire.stub("fdc-port-7", "east", name:"VEE/GND")
 
+let multiplexerheight = 6
+  element.block(
+    x:12,y:-1- multiplexerheight,w:10,h:multiplexerheight,
+    id: "multiplex",
+    fill: rgb("#B87333"),
+    name: "Multiplexer Board",
+    ports: (
+      west:(
+        (id:"DI", name:"Input pin"),
+        (id:"D1", name:"Data input 1"),
+        (id:"D2", name:"Data input 2"),
+        (id:"D3", name:"Data input 3"),
+        (id:"D4", name:"Data input 4"),
+      ),
+      east:(
+        (id:"12V", name:"VCC 12V"),
+        (id:"GND", name:"VEE GND"),
+
+      )
+    )
+  )
+
+  wire.wire("w", ("multiplex-port-DI", "ard-port-D4"), style: "zigzag", zigzag-ratio: 30%)
+  wire.wire("w", ("multiplex-port-D1", "ard-port-D6"), style: "zigzag", zigzag-ratio: 40%)
+  wire.wire("w", ("multiplex-port-D2", "ard-port-D7"), style: "zigzag", zigzag-ratio: 50%)
+  wire.wire("w", ("multiplex-port-D3", "ard-port-D8"), style: "zigzag", zigzag-ratio: 60%)
+  wire.wire("w", ("multiplex-port-D4", "ard-port-D9"), style: "zigzag", zigzag-ratio: 70%)
+
+  wire.stub("multiplex-port-12V", "east", name:"12V-VCC")
+  wire.stub("multiplex-port-GND", "east", name:"VEE/GND")
 })
 ]
 
 
 
-If you need to replace the multiplexer board it is called "Multi USB RS232 RS485 TTL Converter SKU TEL0070".
+If you need to replace the RS-485 Converter board it is called "Multi USB RS232 RS485 TTL Converter SKU TEL0070".
+
+Since the multiplexer requires 12V and the FDC requires 24 V you can use one of the buck-converter from the lab to convert between the two.
+
+
+= Multiplexer board top view pin labels
+
+#figure(
+  cetz.canvas({
+    import cetz.draw: rect, circle, content
+    rect(
+      (0,0), (rel:(10,10)),
+      fill: rgb("#B87333"),
+    )
+
+
+    rect((1,0), (rel:(2.4,1)), fill:green)
+    circle((rel:(-1.9,-0.5)), radius:0.2)
+    circle((rel:(0,0)), radius:0.1, fill:red)
+    content((rel:(0,-1.8), update:false))[#rotate(-90deg)[#text(fill:red, size:14pt)[*VCC - 12V*]]]
+    circle((rel:(0.7,0)), radius:0.2)
+    circle((), radius:0.1, fill:red)
+    circle((rel:(0.7,0)), radius:0.2)
+    circle((), radius:0.1, fill:red)
+    content((rel:(0,-1.8), update:false))[#rotate(-90deg)[#text(fill:red, size:14pt)[*VEE - GND*]]]
+    
+    
+    rect((0,6), (rel:(1,2.4)), fill:green)
+    circle((rel:(-0.5, -1.9)), radius:0.2)
+    circle((rel:(0,0)), radius:0.1, fill:red)
+    content((rel:(-0.7,0), update:false), anchor: "east")[#[#text(fill:red, size:14pt)[*DATA Pin 2*]]]
+    circle((rel:(0,0.7)), radius:0.2)
+    circle((), radius:0.1, fill:red)
+    content((rel:(-0.7,0), update:false), anchor: "east")[#[#text(fill:red, size:14pt)[*DATA Pin 4*]]]
+    circle((rel:(0,0.7)), radius:0.2)
+    circle((), radius:0.1, fill:red)
+    content((rel:(-0.7,0), update:false), anchor: "east")[#[#text(fill:red, size:14pt)[*DATA Pin 3*]]]
+
+
+    rect((0,3), (rel:(1,2.4)), fill:green)
+    circle((rel:(-0.5, -1.9)), radius:0.2)
+    circle((rel:(0,0)), radius:0.1, fill:red)
+    circle((rel:(0,0.7)), radius:0.2)
+    circle((), radius:0.1, fill:red)
+    content((rel:(-0.7,0), update:false), anchor: "east")[#[#text(fill:red, size:14pt)[*Input / Output*]]]
+    circle((rel:(0,0.7)), radius:0.2)
+    circle((), radius:0.1, fill:red)
+    content((rel:(-0.7,0), update:false), anchor: "east")[#[#text(fill:red, size:14pt)[*DATA Pin 1*]]]
+
+
+  })
+)

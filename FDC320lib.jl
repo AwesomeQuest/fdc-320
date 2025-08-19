@@ -484,4 +484,23 @@ function readTandH(port)
 	(temperature=T, humidity=H)
 end
 
+function setmultiplexer(port, control::Unsigned)
+	crc = crc16([0x0b, UInt8(control & 0xff)])
+	write(port, [0x0b, control, UInt8(crc >> 8); UInt8(crc & 0xff)])
+
+	ret = readuntilpause(port)
+
+	return ret
+end
+
+function setmultiplexer(port, d1::Bool,d2::Bool,d3::Bool,d4::Bool, input::Bool)
+	control = (d1) | (d2 << 1) | (d3 << 2) | (d4 << 3) | (input << 4)
+	return setmultiplexer(port, control)
+end
+
+function setmultiplexer(control::Signed)
+	control = UInt8(Unsigned(control) & 0xff | 0b10000)
+	return setmultiplexer(port, control)
+end
+
 using LibSerialPort
