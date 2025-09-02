@@ -45,7 +45,7 @@ curl -fsSL https://install.julialang.org | sh
 == Setup environment
 Then open a Julia REPL in the `FDC-320` folder as follows
 ```
-julia --project=.
+julia --project=/path/to/fdc-320
 ```
 
 
