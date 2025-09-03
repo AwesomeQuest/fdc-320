@@ -486,7 +486,7 @@ end
 
 function setmultiplexer(port, control::Unsigned)
 	crc = crc16([0x0b, UInt8(control & 0xff)])
-	write(port, [0x0b, control, UInt8(crc >> 8); UInt8(crc & 0xff)])
+	write(port, [0x0b, control, UInt8(crc >> 8), UInt8(crc & 0xff)])
 
 	ret = readuntilpause(port)
 
